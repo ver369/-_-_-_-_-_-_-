@@ -234,6 +234,8 @@ df = df.fillna(0)
 
 df
 ```
+![df](https://github.com/ver369/Group_Project_Analysis_of_Country_Attractiveness_for_Startups/blob/main/df.png)
+
 ### Датафрейм с 60 странами (df_final): Расширенный набор стран, где пропущенные значения заменены на средние значения по соответствующим столбцам. Используется для построения модели.
 ```python
 countries = ['Australia', 'Brazil', 'Canada', 'China', 'France', 'Germany', 'India', 'Indonesia', 'Israel', 'Italy', 'Japan', 'Netherlands', 'Russian Federation', 'Singapore', 'South Korea', 'Spain', 'Sweden', 'Switzerland', 'United Kingdom', 'United States',
