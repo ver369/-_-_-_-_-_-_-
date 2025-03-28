@@ -52,7 +52,29 @@ if len(data) > 1:
 df1.loc[df1['Country'] == 'Korea, Rep.', 'Country'] = 'South Korea'
 df1
 ```
+### 2. Данные об уровне безработицы
+```python
+#	Используем локальный файл API_SL.UEM.TOTL.NE.ZS_DS2_en_csv_v2_76310.xls, предоставляемый Всемирным банком
+df2 = pd.read_csv('unemployment_rate.xls', skiprows = 4)
 
+# оставляем только нужные столбцы
+df2 = df2[['Country Name', '2023']]
+
+# переименовываем колонки
+df2 = df2.rename(columns = {'2023': 'Unemploym_2023', 'Country Name': 'Country'})
+
+# переименовываем названия стран, чтобы они были одинаковые для всех показателей
+df2.loc[df2['Country'] == 'Korea, Rep.', 'Country'] = 'South Korea'
+df2.loc[df2['Country'] == 'Venezuela, RB', 'Country'] = 'Venezuela'
+
+# добавляем вручную недостающие значения
+df2.loc[len(df2)] = ['Iran', 9]
+df2.loc[len(df2)] = ['Slovakia', 5.7]
+df2.query("Country.str.contains('Ven', case=False, na=False)")
+df2.loc[df2['Country'] == 'China', 'Unemploym_2023'] = 5.1
+
+df2
+```
 
 
 
