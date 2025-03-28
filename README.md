@@ -464,7 +464,7 @@ print(model.summary())
 1. **Венчурные инвестиции** (*Venture_cap_inv*):  
    - **Сильное влияние** (p < 0.001, коэффициент +0.22).  
    - Каждые **+$1 млн инвестиций → +0.22 стартапа**.  
-   - *Ключевой драйвер* (США, Китай, Великобритания).  
+   - *Ключевые страны* (США, Китай, Великобритания).  
 
 2. **Корпоративные налоги** (*Corporate_Tax_Rate*):  
    - **Пограничная значимость** (p = 0.072, коэффициент -5.1).  
@@ -484,8 +484,396 @@ print(model.summary())
 3. **Прочие экономические показатели** (ВВП, инфляция и др.) в данной модели **не влияют** на число стартапов.  
 
 
+### Ранжирование стран по составному индексу
+Мы применили два разных подхода для построения составного индекса Business Friendliness Index, на основе которого проводилось ранжирование стран по степени их привлекательности для стартапов. 
+
+## Метод 1. Вычисления среднего арифметического нормализованных значений всех показателей
+
+На начальном этапе анализа нами были выбраны следующие экономические показатели:
+- GDP_per_cap (ВВП на душу населения)
+- Unemploym_rate (уровень безработицы)
+- Inflation_rate (инфляция)
+- Gross_monthly_wage (средняя заработная плата)
+- Corporate_Tax_Rate (ставка корпоративного налога)
+- Venture_cap_inv (объём венчурных инвестиций)
+- Total_Startup_Output (общее количество стартапов)
+Некоторые из показателей были обработаны для более корректной интерпретации. 
+Чтобы данные можно было сравнивать между собой, мы провели их нормализацию с помощью метода Min-Max Scaling и все показатели стали в диапазоне от 0 до 1.
+Затем мы рассчитали индекс привлекательности бизнеса (Business Friendliness Index) для каждой страны путем вычисления среднего арифметического нормализованных значений всех показателей
+```python
+df_20['Venture_cap_inv'] = pd.to_numeric(df_20['Venture_cap_inv'], errors = 'coerce')
+df_20['Corporate_Tax_Rate'] = df_20['Corporate_Tax_Rate'].str.rstrip('%').astype(float) / 100.0
+
+# Преобразование столбцов в числа
+df_20 = df_20[['Country', 'GDP_per_cap', 'Unemploym_rate', 'Inflation_rate', 'Gross_monthly_wage', 'Corporate_Tax_Rate', 'Venture_cap_inv', 'Total_Startup_Output']]
+
+# Инвертируем показатели, где "чем меньше, тем лучше"
+df_20_new = df_20
+df_20_new['Unemploym_rate'] = 1 / df_20['Unemploym_rate']  # Безработица
+df_20_new['Inflation_rate'] = 1 / df_20['Inflation_rate']  # Инфляция
+df_20_new['Corporate_Tax_Rate'] = 1 / df_20['Corporate_Tax_Rate']  # Налоги
+
+features = ['GDP_per_cap', 'Unemploym_rate', 'Inflation_rate', 'Gross_monthly_wage', 
+            'Corporate_Tax_Rate', 'Venture_cap_inv', 'Total_Startup_Output']
+
+# Нормализация данных
+from sklearn.preprocessing import MinMaxScaler
+
+scaler = MinMaxScaler()
+
+df_normalized = pd.DataFrame(scaler.fit_transform(df_20_new[features]), columns = features)
+
+# Создание интегрального индекса (например, среднее значение)
+df_normalized['Business_Friendliness_Index'] = df_normalized.mean(axis = 1)
+df_normalized['Country'] = df_20['Country']
+# Сортировка по индексу
+df_normalized = df_normalized.sort_values(by = 'Business_Friendliness_Index', ascending = False)
+
+# Визуализация
+plt.figure(figsize = (10, 6))
+sns.barplot(x = 'Business_Friendliness_Index', y = 'Country', data = df_normalized, palette = 'viridis')
+plt.title('Business Friendliness Index by Country')
+plt.xlabel('Index')
+plt.ylabel('Country')
+plt.show()
+```
+![Ранжирование](https://github.com/ver369/Group_Project_Analysis_of_Country_Attractiveness_for_Startups/blob/main/%D0%A0%D0%B0%D0%BD%D0%B6%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5%20%D0%BC%D0%B5%D1%82%D0%BE%D0%B4%D0%BE%D0%BC%20%D1%81%D1%80%D0%B5%D0%B4%D0%BD%D0%B5%D0%B3%D0%BE.png)
+
+## Метод 2. Метод главных компонент (PCA)
+Второй метод основан на анализе главных компонент (PCA — Principal Component Analysis). Это более продвинутый статистический метод, который позволяет:
+Упростить структуру данных (уменьшить размерность)
+Выделить направление, по которому различия между странами объясняются наибольшей дисперсией
+Сначала мы также применили Min-Max нормализацию всех признаков. Затем на нормализованные данные был применён PCA с одной главной компонентой. Эта компонента представляла собой взвешенное сочетание всех исходных признаков, где веса подбирались автоматически на основе дисперсий в данных. То есть, признаки с большей вариативностью между странами получили больший вес.
+Полученное значение главной компоненты и стало новым индексом Business Friendliness Index (PCA). Мы использовали его для альтернативного ранжирования стран и сравнения с первым методом.
+
+```python
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.decomposition import PCA
+
+# Выбор нужных столбцов
+features = [
+    'GDP_per_cap', 'Unemploym_rate', 'Inflation_rate', 'Gross_monthly_wage', 
+    'Corporate_Tax_Rate', 'Venture_cap_inv', 'Total_Startup_Output']
+
+# Нормализация данных
+scaler = MinMaxScaler()
+df_normalized = pd.DataFrame(scaler.fit_transform(df_20_new[features]), columns = features)
+df_normalized['Country'] = df_20_new['Country']
+
+# Применение PCA
+pca = PCA(n_components = 1)
+pca_values = pca.fit_transform(df_normalized[features])
+pca_scaler = MinMaxScaler()
+df_normalized['Business_Friendliness_Index'] = pca_scaler.fit_transform(pca_values)
+
+# Сортировка по индексу
+df_normalized = df_normalized.sort_values(by = 'Business_Friendliness_Index', ascending = False)
+
+# Визуализация
+plt.figure(figsize = (10, 6))
+sns.barplot(x = 'Business_Friendliness_Index', y = 'Country', data = df_normalized, palette = 'viridis')
+plt.title('Business Friendliness Index by Country (PCA)')
+plt.xlabel('Index')
+plt.ylabel('Country')
+plt.show()
+```
+![Ранжирование2](https://github.com/ver369/Group_Project_Analysis_of_Country_Attractiveness_for_Startups/blob/main/%D0%A0%D0%B0%D0%BD%D0%B6%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5%20PCA.png)
+
+## Методология построения модели
+**Для начала:** наша цель - создать модель, чтобы в итоге можно было понять, подходит страна для бизнеса или нет (бинарная целевая переменная; 1 - страна подходит, 0 - страна не подходит). Мы ввели дополнительные веса для экономических факторов, которые были подобраны исходя из нашего теоретического анализа.
+**Обоснование весов:** 
+- ВВП на душу населения получил наибольший вес 0.3 по модулю, так как это ключевой показатель экономического развития
+- Уровень безработицы получил вес 0.2 по модулю, так как стабильность рынка труда критически важна для бизнеса
+- Остальные показатели получили вес 0.1 по модулю, так как они также важны, но в меньшей степени
+Мы применили **алгоритм машинного обучения Random Forest** в рамках нашего проекта.
 
 
+### Принцип работы Random Forest в рамках проекта:
+**Этап обучения модели:**
+Random Forest представляет собой ансамбль деревьев решений, каждое из которых обучается на случайно отобранной подвыборке данных и случайном подмножестве признаков.
+Например, отдельные деревья могут выделять наиболее важные признаки по-разному: одно дерево начинает разбиение по уровню ВВП на душу населения, другое — по инфляции, третье — по объему венчурных инвестиций. То есть, каждое дерево вносит уникальный вклад в общую модель.
+После завершения обучения модель использует подход голосования: каждое дерево выносит свой прогноз (страна является или не является благоприятной для бизнеса — 1 или 0). Окончательный прогноз модели определяется большинством голосов, полученных от всех деревьев.
+
+### Проверка гипотезы
+На данной модели мы проверили нашу гипотезу “Страны с более высоким ВВП на душу населения более благоприятны для стартапов”. 
+Исходя из изначально подобранных весов, при проверке значимости показателей, ВВП оказался на первом месте. Мы решили проверить устойчивость модели и изменили веса, чтобы посмотреть как это влияет на значимость факторов и выводы. Несмотря на различные комбинации весов, показатель GDP_per_cap оставался фактором с самой высокой значимостью. 
+Это подтверждает нашу гипотезу, что высокий ВВП на душу населения создает более благоприятные для стартапов условия. 
+ 
+
+```python
+weights = {
+    'GDP_per_cap': 0.3,
+    'Unemploym_rate': -0.2,
+    'Inflation_rate': -0.1,
+    'Gross_monthly_wage': 0.1,
+    'Corporate_Tax_Rate': -0.1,
+    'Venture_cap_inv': 0.1,
+    'Total_Startup_Output': 0.1
+}
+```
+Положительные веса означают, что увеличение значения этих показателей улучшает привлекательность страны для стартапов (например, высокий ВВП на душу населения).
+Отрицательные веса говорят о том, что чем ниже показатель (например, инфляция или безработица), тем более благоприятна страна.
+
+```python
+df_final_without_complx = df_final[['Country', 'GDP_per_cap', 'Unemploym_rate', 'Inflation_rate',
+       'Gross_monthly_wage', 'Corporate_Tax_Rate',
+       'Venture_cap_inv', 'Total_Startup_Output']]
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import MinMaxScaler
+
+weights = {
+    'GDP_per_cap': 0.3,
+    'Unemploym_rate': -0.2,
+    'Inflation_rate': -0.1,
+    'Gross_monthly_wage': 0.1,
+    'Corporate_Tax_Rate': -0.1,
+    'Venture_cap_inv': 0.1,
+    'Total_Startup_Output': 0.1}
+
+
+countries = df_final_without_complx['Country']
+
+# Удаляем столбец 'Country' из данных перед нормализацией
+df_final_numeric = df_final_without_complx.drop(columns = ['Country'])
+
+# Нормализация данных (приведение к диапазону [0, 1])
+scaler = MinMaxScaler()
+df_final_scaled = pd.DataFrame(scaler.fit_transform(df_final_numeric), columns = df_final_numeric.columns)
+ 
+# Добавляем столбец 'Country' обратно
+df_final_scaled['Country'] = countries
+
+# Расчет общей оценки
+df_final_without_complx['Business_Score'] = (
+    df_final_scaled['GDP_per_cap'] * weights['GDP_per_cap'] +
+    df_final_scaled['Unemploym_rate'] * weights['Unemploym_rate'] +
+    df_final_scaled['Inflation_rate'] * weights['Inflation_rate'] +
+    df_final_scaled['Gross_monthly_wage'] * weights['Gross_monthly_wage'] +
+    df_final_scaled['Corporate_Tax_Rate'] * weights['Corporate_Tax_Rate'] +
+    df_final_scaled['Venture_cap_inv'] * weights['Venture_cap_inv'] +
+    df_final_scaled['Total_Startup_Output'] * weights['Total_Startup_Output'])
+
+# Создание целевой переменной
+threshold = df_final_without_complx['Business_Score'].median()
+df_final_without_complx['Business_Friendly'] = (df_final_without_complx['Business_Score'] > threshold).astype(int)
+df_final_without_complx
+```
+![df](https://github.com/ver369/Group_Project_Analysis_of_Country_Attractiveness_for_Startups/blob/main/df_final_without_complx.png)
+
+```python
+# Проверка распределения
+print(df_final_without_complx[['Country', 'Business_Score', 'Business_Friendly']])
+print(df_final_without_complx['Business_Friendly'].value_counts())
+
+# Визуализация
+sns.countplot(x = 'Business_Friendly', data = df_final_without_complx)
+plt.title('Распределение целевой переменной')
+plt.show()
+```
+![Распр](https://github.com/ver369/Group_Project_Analysis_of_Country_Attractiveness_for_Startups/blob/main/%D0%9F%D1%80%D0%BE%D0%B2%D0%B5%D1%80%D0%BA%D0%B0%20%D1%80%D0%B0%D1%81%D0%BF%D1%80%D0%B5%D0%B4%D0%B5%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F.png)
+
+```python
+X = df_final_without_complx.drop(columns = ['Business_Friendly', 'Business_Score'])
+y = df_final_without_complx['Business_Friendly']
+
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state = 42)
+X_train = X_train.drop(columns = ['Country'])
+X_test = X_test.drop(columns = ['Country'])
+
+from sklearn.ensemble import RandomForestClassifier
+
+# Создание модели
+model = RandomForestClassifier(n_estimators = 100, random_state = 42)
+
+# Обучение модели
+model.fit(X_train, y_train)
+from sklearn.metrics import accuracy_score
+
+# Предсказание на тестовой выборке
+y_pred = model.predict(X_test)
+
+# Расчет точности
+accuracy = accuracy_score(y_test, y_pred)
+print(f'Точность модели: {accuracy:.2f}')
+```
+### Вывод: Точность модели: 0.85
+
+```python
+from sklearn.metrics import classification_report
+
+# Отчет о классификации
+print('Отчет о классификации:')
+print(classification_report(y_test, y_pred))
+```
+![j](https://github.com/ver369/Group_Project_Analysis_of_Country_Attractiveness_for_Startups/blob/main/%D0%9E%D1%82%D1%87%D1%91%D1%82%20%D0%BE%20%D0%BA%D0%BB%D0%B0%D1%81%D1%81%D0%B8%D1%84%D0%B8%D0%BA%D0%B0%D1%86%D0%B8%D0%B8.png)
+
+```python
+from sklearn.model_selection import cross_val_score
+
+# Кросс-валидация (например, 5 фолдов)
+cv_scores = cross_val_score(model, X_train, y_train, cv = 5, scoring = 'accuracy')
+
+# Средняя точность по кросс-валидации
+print(f'Точность по кросс-валидации: {cv_scores.mean():.2f}')
+```
+### Вывод: Точность по кросс-валидации: 0.79
+
+```python
+from sklearn.metrics import roc_auc_score, roc_curve
+import matplotlib.pyplot as plt
+
+# Предсказание вероятностей для положительного класса
+y_pred_proba = model.predict_proba(X_test)[:, 1]
+
+# Расчет ROC-AUC
+roc_auc = roc_auc_score(y_test, y_pred_proba)
+print(f'ROC-AUC: {roc_auc:.2f}')
+
+# Построение ROC-кривой
+fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
+plt.plot(fpr, tpr, label = f'ROC-AUC = {roc_auc:.2f}')
+plt.plot([0, 1], [0, 1], linestyle = '--', color = 'gray')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC-кривая')
+plt.legend()
+plt.show()
+```
+![roc](https://github.com/ver369/Group_Project_Analysis_of_Country_Attractiveness_for_Startups/blob/main/ROC%20%D0%BA%D1%80%D0%B8%D0%B2%D0%B0%D1%8F.png)
+
+```python
+import pandas as pd
+
+# Важность признаков
+feature_importances = model.feature_importances_
+feature_names = X_train.columns
+
+# Создание DataFrame для удобства
+importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': feature_importances})
+importance_df = importance_df.sort_values(by = 'Importance', ascending = False)
+
+print('Важность признаков:')
+print(importance_df)
+
+# Визуализация важности признаков
+importance_df.plot(kind = 'bar', x = 'Feature', y = 'Importance', legend = False)
+plt.title('Важность признаков')
+plt.ylabel('Важность')
+plt.xlabel('Признак')
+plt.show()
+```
+![признаки](https://github.com/ver369/Group_Project_Analysis_of_Country_Attractiveness_for_Startups/blob/main/%D0%92%D0%B0%D0%B6%D0%BD%D0%BE%D1%81%D1%82%D1%8C%20%D0%BF%D1%80%D0%B8%D0%B7%D0%BD%D0%B0%D0%BA%D0%BE%D0%B2.png)
+
+```python
+# Проверим на рандомных данных, где одна страна с хорошими показателями, а вторая с плохими
+new_data = {
+    'GDP_per_cap': [45000, 28000],
+    'Unemploym_rate': [6, 8],
+    'Inflation_rate': [2, 4],
+    'Gross_monthly_wage': [3200, 2400],
+    'Corporate_Tax_Rate': [16, 22],
+    'Venture_cap_inv': [220, 180],
+    'Total_Startup_Output': [650, 480]}
+
+new_df = pd.DataFrame(new_data)
+
+new_predictions = model.predict(new_df)
+print('Предсказания для новых данных:')
+print(new_predictions)
+```
+### Предсказания для новых данных: [1 0]
+
+## Проверка гипотезы "Страны с более высоким ВВП на душу населения более благоприятны для стартапов"
+
+```python
+# Cоздаём равные веса равные 1/7 = 0.14285714285714285
+weights_equal = {
+    'GDP_per_cap': 0.14285714285714285,
+    'Unemploym_rate': -0.14285714285714285,
+    'Inflation_rate': -0.14285714285714285,
+    'Gross_monthly_wage': 0.14285714285714285,
+    'Corporate_Tax_Rate': -0.14285714285714285,
+    'Venture_cap_inv': 0.14285714285714285,
+    'Total_Startup_Output': 0.14285714285714285}
+
+countries = df_final_without_complx['Country']
+
+# Удаляем столбец 'Country' из данных перед нормализацией
+df_final_numeric = df_final_without_complx.drop(columns = ['Country'])
+
+# Нормализация данных (приведение к диапазону [0, 1])
+scaler = MinMaxScaler()
+df_final_scaled = pd.DataFrame(scaler.fit_transform(df_final_numeric), columns = df_final_numeric.columns)
+ 
+# Добавляем столбец 'Country' обратно
+df_final_scaled['Country'] = countries
+
+# Расчет общей оценки
+df_final_without_complx['Business_Score'] = (
+    df_final_scaled['GDP_per_cap'] * weights['GDP_per_cap'] +
+    df_final_scaled['Unemploym_rate'] * weights['Unemploym_rate'] +
+    df_final_scaled['Inflation_rate'] * weights['Inflation_rate'] +
+    df_final_scaled['Gross_monthly_wage'] * weights['Gross_monthly_wage'] +
+    df_final_scaled['Corporate_Tax_Rate'] * weights['Corporate_Tax_Rate'] +
+    df_final_scaled['Venture_cap_inv'] * weights['Venture_cap_inv'] +
+    df_final_scaled['Total_Startup_Output'] * weights['Total_Startup_Output'])
+
+# Создание целевой переменной
+threshold = df_final_without_complx['Business_Score'].median()
+df_final_without_complx['Business_Friendly'] = (df_final_without_complx['Business_Score'] > threshold).astype(int)
+df_final_without_complx
+```
+![f](https://github.com/ver369/Group_Project_Analysis_of_Country_Attractiveness_for_Startups/blob/main/df_final_without_complx.png)
+
+```python
+# Важность признаков
+feature_importances = model.feature_importances_
+feature_names = X_train.columns
+
+# Создание DataFrame для удобства
+importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': feature_importances})
+importance_df = importance_df.sort_values(by = 'Importance', ascending = False)
+
+print('Важность признаков:')
+print(importance_df)
+
+# Визуализация важности признаков
+importance_df.plot(kind = 'bar', x = 'Feature', y = 'Importance', legend = False)
+plt.title('Важность признаков')
+plt.ylabel('Важность')
+plt.xlabel('Признак')
+plt.show()
+```
+![pr2](https://github.com/ver369/Group_Project_Analysis_of_Country_Attractiveness_for_Startups/blob/main/%D0%92%D0%B0%D0%B6%D0%BD%D0%BE%D1%81%D1%82%D1%8C%20%D0%BF%D1%80%D0%B8%D0%B7%D0%BD%D0%B0%D0%BA%D0%BE%D0%B2%202.png)
+
+## Результаты модели и индекса Business Friendliness Index
+
+**Анализ составного индекса Business Friendliness Index**
+
+На основе расчета индекса были выявлены страны-лидеры, которые демонстрируют наибольший потенциал для развития стартапов. Среди них выделяются: США, Сингапур, Швейцария, Австралия и Нидерланды с высоким уровнем ВВП на душу населения, развитой инфраструктурой и доступом к венчурному капиталу.
+
+Эти страны характеризуются низкими уровнями инфляции и безработицы, а также благоприятной налоговой средой. Это делает их привлекательными для стартапа.
+
+
+**Результаты модели Random Forest**
+
+Использование Random Forest позволило получить четкое понимание того, как различные экономические факторы и их комбинации влияют на привлекательность страны для стартапов.
+
+**Результаты модели**
+
+Наиболее значимыми признаками, влияющими на успешность стран для развития стартапов, оказались:
+
+-	GDP_per_cap
+-	Gross_monthly_wage
+-	Unemploym_rate
+
+Важность этих признаков была значительно выше, чем у других факторов.
+Модель Random Forest позволила нам при загрузке экономических показателей страны выявить, подходит ли она для стартапа (1 - подходит, 0 - не подходит). 
 
 
 
