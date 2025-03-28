@@ -296,6 +296,7 @@ df_final = df_final.drop([6, 23, 25])
 df_final = df_final.reset_index(drop = True)
 df_final
 ```
+![df_final](https://github.com/ver369/Group_Project_Analysis_of_Country_Attractiveness_for_Startups/blob/main/df_final.png)
 ### Датафрейм с 20 странами (df_20): Содержит только страны, для которых есть данные по всем показателям.
 ```python
 # код для создания датасета из 20 стран, где значения по всем столбцам были изначально
@@ -314,6 +315,7 @@ df_20 = df_20.rename(columns = {'Unemploym_2023': 'Unemploym_rate'})
 
 df_20
 ```
+![df_20](https://github.com/ver369/Group_Project_Analysis_of_Country_Attractiveness_for_Startups/blob/main/df_20.png)
 
 ## Разведывательный анализ данных
 ## 1.	Расширенный описательный анализ данных
